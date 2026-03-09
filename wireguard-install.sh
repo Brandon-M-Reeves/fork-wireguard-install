@@ -771,7 +771,7 @@ create_server_config() {
 # ENDPOINT $([[ -n "$public_ip" ]] && echo "$public_ip" || echo "$ip")
 
 [Interface]
-Address = 10.7.0.1/24$([[ -n "$ip6" ]] && echo ", fddd:2c4:2c4:2c4::1/64")
+Address = 10.242.0.1/16$([[ -n "$ip6" ]] && echo ", fddd:2c4:2c4:2c4::1/64")
 PrivateKey = $(wg genkey)
 ListenPort = $port
 
@@ -783,12 +783,12 @@ create_firewall_rules() {
 	if systemctl is-active --quiet firewalld.service; then
 		# Using both permanent and not permanent rules to avoid a firewalld reload
 		firewall-cmd -q --add-port="$port"/udp
-		firewall-cmd -q --zone=trusted --add-source=10.7.0.0/24
+		firewall-cmd -q --zone=trusted --add-source=10.242.0.0/16
 		firewall-cmd -q --permanent --add-port="$port"/udp
-		firewall-cmd -q --permanent --zone=trusted --add-source=10.7.0.0/24
+		firewall-cmd -q --permanent --zone=trusted --add-source=10.242.0.0/16
 		# Set NAT for the VPN subnet
-		firewall-cmd -q --direct --add-rule ipv4 nat POSTROUTING 0 -s 10.7.0.0/24 ! -d 10.7.0.0/24 -j MASQUERADE
-		firewall-cmd -q --permanent --direct --add-rule ipv4 nat POSTROUTING 0 -s 10.7.0.0/24 ! -d 10.7.0.0/24 -j MASQUERADE
+		firewall-cmd -q --direct --add-rule ipv4 nat POSTROUTING 0 -s 10.242.0.0/16 ! -d 10.242.0.0/16 -j MASQUERADE
+		firewall-cmd -q --permanent --direct --add-rule ipv4 nat POSTROUTING 0 -s 10.242.0.0/16 ! -d 10.242.0.0/16 -j MASQUERADE
 		if [[ -n "$ip6" ]]; then
 			firewall-cmd -q --zone=trusted --add-source=fddd:2c4:2c4:2c4::/64
 			firewall-cmd -q --permanent --zone=trusted --add-source=fddd:2c4:2c4:2c4::/64
@@ -810,13 +810,13 @@ After=network-online.target
 Wants=network-online.target
 [Service]
 Type=oneshot
-ExecStart=$iptables_path -w 5 -t nat -A POSTROUTING -s 10.7.0.0/24 ! -d 10.7.0.0/24 -j MASQUERADE
+ExecStart=$iptables_path -w 5 -t nat -A POSTROUTING -s 10.242.0.0/16 ! -d 10.242.0.0/16 -j MASQUERADE
 ExecStart=$iptables_path -w 5 -I INPUT -p udp --dport $port -j ACCEPT
-ExecStart=$iptables_path -w 5 -I FORWARD -s 10.7.0.0/24 -j ACCEPT
+ExecStart=$iptables_path -w 5 -I FORWARD -s 10.242.0.0/16 -j ACCEPT
 ExecStart=$iptables_path -w 5 -I FORWARD -m state --state RELATED,ESTABLISHED -j ACCEPT
-ExecStop=$iptables_path -w 5 -t nat -D POSTROUTING -s 10.7.0.0/24 ! -d 10.7.0.0/24 -j MASQUERADE
+ExecStop=$iptables_path -w 5 -t nat -D POSTROUTING -s 10.242.0.0/16 ! -d 10.242.0.0/16 -j MASQUERADE
 ExecStop=$iptables_path -w 5 -D INPUT -p udp --dport $port -j ACCEPT
-ExecStop=$iptables_path -w 5 -D FORWARD -s 10.7.0.0/24 -j ACCEPT
+ExecStop=$iptables_path -w 5 -D FORWARD -s 10.242.0.0/16 -j ACCEPT
 ExecStop=$iptables_path -w 5 -D FORWARD -m state --state RELATED,ESTABLISHED -j ACCEPT" > /etc/systemd/system/wg-iptables.service
 		if [[ -n "$ip6" ]]; then
 			echo "ExecStart=$ip6tables_path -w 5 -t nat -A POSTROUTING -s fddd:2c4:2c4:2c4::/64 ! -d fddd:2c4:2c4:2c4::/64 -j MASQUERADE
@@ -839,14 +839,14 @@ WantedBy=multi-user.target" >> /etc/systemd/system/wg-iptables.service
 remove_firewall_rules() {
 	port=$(grep '^ListenPort' "$WG_CONF" | cut -d " " -f 3)
 	if systemctl is-active --quiet firewalld.service; then
-		ip=$(firewall-cmd --direct --get-rules ipv4 nat POSTROUTING | grep '\-s 10.7.0.0/24 '"'"'!'"'"' -d 10.7.0.0/24' | grep -oE '[^ ]+$')
+		ip=$(firewall-cmd --direct --get-rules ipv4 nat POSTROUTING | grep '\-s 10.242.0.0/16 '"'"'!'"'"' -d 10.242.0.0/16' | grep -oE '[^ ]+$')
 		# Using both permanent and not permanent rules to avoid a firewalld reload.
 		firewall-cmd -q --remove-port="$port"/udp
-		firewall-cmd -q --zone=trusted --remove-source=10.7.0.0/24
+		firewall-cmd -q --zone=trusted --remove-source=10.242.0.0/16
 		firewall-cmd -q --permanent --remove-port="$port"/udp
-		firewall-cmd -q --permanent --zone=trusted --remove-source=10.7.0.0/24
-		firewall-cmd -q --direct --remove-rule ipv4 nat POSTROUTING 0 -s 10.7.0.0/24 ! -d 10.7.0.0/24 -j MASQUERADE
-		firewall-cmd -q --permanent --direct --remove-rule ipv4 nat POSTROUTING 0 -s 10.7.0.0/24 ! -d 10.7.0.0/24 -j MASQUERADE
+		firewall-cmd -q --permanent --zone=trusted --remove-source=10.242.0.0/16
+		firewall-cmd -q --direct --remove-rule ipv4 nat POSTROUTING 0 -s 10.242.0.0/16 ! -d 10.242.0.0/16 -j MASQUERADE
+		firewall-cmd -q --permanent --direct --remove-rule ipv4 nat POSTROUTING 0 -s 10.242.0.0/16 ! -d 10.242.0.0/16 -j MASQUERADE
 		if grep -qs 'fddd:2c4:2c4:2c4::1/64' "$WG_CONF"; then
 			ip6=$(firewall-cmd --direct --get-rules ipv6 nat POSTROUTING | grep '\-s fddd:2c4:2c4:2c4::/64 '"'"'!'"'"' -d fddd:2c4:2c4:2c4::/64' | grep -oE '[^ ]+$')
 			firewall-cmd -q --zone=trusted --remove-source=fddd:2c4:2c4:2c4::/64
@@ -932,14 +932,22 @@ select_dns() {
 
 select_client_ip() {
 	# Given a list of the assigned internal IPv4 addresses, obtain the lowest still
-	# available octet. Important to start looking at 2, because 1 is our gateway.
-	octet=2
-	while grep AllowedIPs "$WG_CONF" | cut -d "." -f 4 | cut -d "/" -f 1 | grep -q "^$octet$"; do
-		(( octet++ ))
+	# available address in the 10.242.0.0/16 subnet. The server is at 10.242.0.1,
+	# so clients start at 10.242.0.2. We track both the 3rd octet (third) and
+	# 4th octet (fourth), skipping .X.0 (network) and .X.255 (broadcast).
+	third=0
+	fourth=2
+	while grep -q "AllowedIPs = 10\.242\.$third\.$fourth/32" "$WG_CONF"; do
+		(( fourth++ ))
+		if [[ "$fourth" -eq 255 ]]; then
+			# Skip .X.255 broadcast; move to next /24 block starting at .1
+			(( third++ ))
+			fourth=1
+		fi
 	done
 	# Don't break the WireGuard configuration in case the address space is full
-	if [[ "$octet" -eq 255 ]]; then
-		exiterr "253 clients are already configured. The WireGuard internal subnet is full!"
+	if [[ "$third" -eq 256 ]]; then
+		exiterr "65533 clients are already configured. The WireGuard internal subnet is full!"
 	fi
 }
 
@@ -954,22 +962,24 @@ new_client() {
 			read -rp "Do you want to specify an internal IP address for the new client? [y/N]: " specify_ip
 		done
 		if [[ ! "$specify_ip" =~ ^[yY]$ ]]; then
-			echo "Using auto assigned IP address 10.7.0.$octet."
+			echo "Using auto assigned IP address 10.242.$third.$fourth."
 		fi
 	fi
 	if [[ "$specify_ip" =~ ^[yY]$ ]]; then
 		echo
-		read -rp "Enter IP address for the new client (e.g. 10.7.0.X): " client_ip
-		octet=$(printf '%s' "$client_ip" | cut -d "." -f 4)
-		until [[ $client_ip =~ ^10\.7\.0\.([2-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-4])$ ]] \
-			&& ! grep AllowedIPs "$WG_CONF" | cut -d "." -f 4 | cut -d "/" -f 1 | grep -q "^$octet$"; do
-			if [[ ! $client_ip =~ ^10\.7\.0\.([2-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-4])$ ]]; then
-				echo "Invalid IP address. Must be within the range 10.7.0.2 to 10.7.0.254."
+		read -rp "Enter IP address for the new client (e.g. 10.242.0.X): " client_ip
+		third=$(printf '%s' "$client_ip" | cut -d "." -f 3)
+		fourth=$(printf '%s' "$client_ip" | cut -d "." -f 4)
+		until [[ $client_ip =~ ^10\.242\.(0\.([2-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-4])|([1-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.([1-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-4]))$ ]] \
+			&& ! grep -q "AllowedIPs = 10\.242\.$third\.$fourth/32" "$WG_CONF"; do
+			if [[ ! $client_ip =~ ^10\.242\.(0\.([2-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-4])|([1-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.([1-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-4]))$ ]]; then
+				echo "Invalid IP address. Must be within the range 10.242.0.2 to 10.242.255.254 (excluding .X.0 and .X.255)."
 			else
 				echo "The IP address is already in use. Please choose another one."
 			fi
-			read -rp "Enter IP address for the new client (e.g. 10.7.0.X): " client_ip
-			octet=$(printf '%s' "$client_ip" | cut -d "." -f 4)
+			read -rp "Enter IP address for the new client (e.g. 10.242.0.X): " client_ip
+			third=$(printf '%s' "$client_ip" | cut -d "." -f 3)
+			fourth=$(printf '%s' "$client_ip" | cut -d "." -f 4)
 		done
 	fi
 	key=$(wg genkey)
@@ -980,14 +990,14 @@ new_client() {
 [Peer]
 PublicKey = $(wg pubkey <<< "$key")
 PresharedKey = $psk
-AllowedIPs = 10.7.0.$octet/32$(grep -q 'fddd:2c4:2c4:2c4::1' "$WG_CONF" && echo ", fddd:2c4:2c4:2c4::$octet/128")
+AllowedIPs = 10.242.$third.$fourth/32$(grep -q 'fddd:2c4:2c4:2c4::1' "$WG_CONF" && echo ", fddd:2c4:2c4:2c4::$fourth/128")
 # END_PEER $client
 EOF
 	# Create client configuration
 	get_export_dir
 	cat << EOF > "$export_dir$client".conf
 [Interface]
-Address = 10.7.0.$octet/24$(grep -q 'fddd:2c4:2c4:2c4::1' "$WG_CONF" && echo ", fddd:2c4:2c4:2c4::$octet/64")
+Address = 10.242.$third.$fourth/16$(grep -q 'fddd:2c4:2c4:2c4::1' "$WG_CONF" && echo ", fddd:2c4:2c4:2c4::$fourth/64")
 DNS = $dns
 PrivateKey = $key
 
